@@ -1,0 +1,9 @@
+Parent,Child
+/,home
+/home,user
+user,documents
+documents,resume.docx
+documents,notes.txt
+home,lib
+lib,lib.so
+example
