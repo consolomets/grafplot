@@ -3,6 +3,11 @@ import dash
 import dash_html_components as html
 import dash_cytoscape as cyto
 from ast import literal_eval
+import hashlib
+
+def make_class_from_color(bg, font):
+    # Уникальное имя класса из цветов (можно хешировать, чтобы было компактно)
+    return f"c-{hashlib.md5((bg+font).encode()).hexdigest()[:6]}"
 
 cyto.load_extra_layouts()
 
@@ -32,9 +37,11 @@ node_styles = {n: {"font_color": DEFAULT_FONT, "background_color": DEFAULT_BG}
 # Apply colors from CSV (assumed to describe the child node)
 for _, row in df.iterrows():
     child = str(row['Child'])
+    bg = row.get('BackgroundColorChild') or DEFAULT_BG
+    font = row.get('FontColorChild') or DEFAULT_FONT
     node_styles[child] = {
-        "font_color": row.get('FontColor', DEFAULT_FONT),
-        "background_color": row.get('BackgroundColor', DEFAULT_BG)
+        "font_color": font,
+        "background_color": bg
     }
 
 # Создание узлов с учетом цветов
@@ -66,34 +73,39 @@ app.layout = html.Div([
         },
         style={'height': '95vh', 'width': '100%'},
             stylesheet = [
-                {
-                    "selector": "node",
-                    "style": {
-                        "shape": "rectangle",
-                        "background-color": "data(background_color)",
-                        "border-color": "#000000",
-                        "border-width": 2,
-                        "label": "data(label)",
-                        "color": "data(font_color)",
-                        "font-size": "12px",
-                        "text-valign": "center",
-                        "text-halign": "center",
-                        "width": "label",
-                        "height": "label",
-                        "padding": "5px"
-                    }
-                },
-                {
-                    "selector": "edge",
-                    "style": {
-                        "width": 2,
-                        "line-color": "#aaaaaa",
-                        "target-arrow-shape": "triangle",
-                        "target-arrow-color": "#aaaaaa",
-                        "arrow-scale": 1
-                    }
-                }
-            ]
+    {
+        "selector": "node",
+        "style": {
+            "shape": "rectangle",
+            "border-color": "#000000",
+            "border-width": 2,
+            "label": "data(label)",
+            "font-size": "12px",
+            "text-valign": "center",
+            "text-halign": "center",
+            "width": "label",
+            "height": "label",
+            "padding": "5px"
+        }
+    },
+    {
+        "selector": "edge",
+        "style": {
+            "width": 2,
+            "line-color": "#aaaaaa",
+            "target-arrow-shape": "triangle",
+            "target-arrow-color": "#aaaaaa",
+            "arrow-scale": 1
+        }
+    }
+]
+
+# Добавляем стили для кастомных классов
+for class_name, style in classes_styles.items():
+    stylesheet.append({
+        "selector": f".{class_name}",
+        "style": style
+    })
     )
 ])
 
