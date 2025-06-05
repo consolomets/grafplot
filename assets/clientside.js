@@ -1,3 +1,14 @@
+// Сохраняем ссылку на Cytoscape instance после загрузки
+document.addEventListener("DOMContentLoaded", function () {
+    const interval = setInterval(() => {
+        const cyComponent = document.querySelector("[id^='cytoscape']");
+        if (cyComponent && cyComponent._cyreg && cyComponent._cyreg.cy) {
+            window.cy = cyComponent._cyreg.cy;
+            clearInterval(interval);
+        }
+    }, 300);
+});
+
 window.dash_clientside = Object.assign({}, window.dash_clientside, {
     clientside: {
         download_svg: function(n_clicks) {

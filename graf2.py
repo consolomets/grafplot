@@ -107,10 +107,8 @@ app.layout = html.Div([
         elements=nodes + edges,
         layout={'name': 'dagre', 'rankDir': 'LR'},
         style={'height': '95vh', 'width': '100%'},
-        stylesheet=stylesheet,
-        # Важно: сохраняем cy в window
-        **{"cytoscapeOptions": {"ready": {"function": "function(cy){ window.cy = cy; }"}}}
-)
+        stylesheet=stylesheet
+    )
 
 ])
 
