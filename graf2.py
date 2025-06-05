@@ -2,6 +2,7 @@ import pandas as pd
 import dash_cytoscape as cyto
 from dash import Dash, html
 import hashlib
+from dash_extensions.enrich import DashProxy, Output, Input, ClientsideFunction
 
 cyto.load_extra_layouts()
 
@@ -97,17 +98,27 @@ for cls, style in classes_styles.items():
     })
 
 # === Dash-приложение ===
-app = Dash(__name__)
+app = DashProxy(__name__)
 
 app.layout = html.Div([
+    html.Button("Скачать SVG", id="btn-download-svg"),
     cyto.Cytoscape(
         id='cytoscape',
         elements=nodes + edges,
         layout={'name': 'dagre', 'rankDir': 'LR'},
         style={'height': '95vh', 'width': '100%'},
-        stylesheet=stylesheet
-    )
+        stylesheet=stylesheet,
+        # Важно: сохраняем cy в window
+        **{"cytoscapeOptions": {"ready": {"function": "function(cy){ window.cy = cy; }"}}}
+)
+
 ])
+
+app.clientside_callback(
+    ClientsideFunction(namespace="clientside", function_name="download_svg"),
+    Output("cytoscape", "generateImage"),
+    Input("btn-download-svg", "n_clicks")
+)
 
 if __name__ == '__main__':
     app.run(debug=True)
