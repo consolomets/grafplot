@@ -1,11 +1,21 @@
-grep -rE 'location|proxy_pass' /путь/к/директории --include='*.conf' | awk -F: '
-/location/ {
-  file=$1;
-  if (match($0, /location\s+([^ {]+)/, m)) loc=m[1];
-}
-/proxy_pass/ {
-  if (match($0, /proxy_pass\s+([^ ;]+)/, m)) print file "\t" loc "\t" m[1];
-}'
+while read file; do
+  awk '
+    $0 ~ /^[ \t]*location[ \t]+/ {
+      if (match($0, /location[ \t]+([^ \t{]+)/, m)) {
+        loc = m[1]
+        in_location = 1
+      }
+    }
+    in_location && $0 ~ /proxy_pass[ \t]+/ {
+      if (match($0, /proxy_pass[ \t]+([^ \t;]+)/, m)) {
+        print FILENAME "\t" loc "\t" m[1]
+        in_location = 0
+      }
+    }
+    $0 ~ /}/ { in_location = 0 }
+  ' "$file"
+done < список_файлов.txt
+
 
 
 grep -rP '^\s*include\s+' /путь/к/директории --include='*.conf' | sed -E 's/^\s*([^:]+):\s*include\s+([^;]+);?.*$/\1\t\2/'
