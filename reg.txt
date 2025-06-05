@@ -15,32 +15,51 @@ grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*i
 
 
 
-dir="/путь/к/директории" && start="$dir/nginx.conf" && awk -v dir="$dir" '
-function resolve(file,   line, inc, cmd, path, matches, i) {
+dir="/etc/nginx" && start="$dir/nginx.conf" && awk -v dir="$dir" -v start="$start" '
+function resolve(file,   line, inc, full, real, i, glob_cmd, glob_path) {
   while ((getline line < file) > 0) {
-    if (line ~ /^[[:space:]]*include[[:space:]]+/) {
-      gsub(/;/, "", line);
-      split(line, parts, /[[:space:]]+/);
-      for (i = 2; i <= length(parts); i++) {
-        inc = parts[i];
-        cmd = "find \"" dir "\" -type f -name \"" basename(inc) "\"";
-        while ((cmd | getline path) > 0) {
-          print file "\t" path;
-          if (!(path in seen)) {
-            seen[path] = 1;
-            resolve(path);
+    if (match(line, /^[[:space:]]*include[[:space:]]+([^;]+);?/, m)) {
+      inc = m[1];
+      gsub(/["'\''"]/, "", inc);
+
+      # относительный путь → относительно текущего файла
+      if (inc !~ /^\//) {
+        base = file;
+        sub(/[^\/]+$/, "", base);
+        full = base inc;
+      } else {
+        full = inc;
+      }
+
+      # glob-шаблоны (например *.conf)
+      glob_cmd = "ls -1 " full " 2>/dev/null";
+      while ((glob_cmd | getline glob_path) > 0) {
+        real_cmd = "realpath \"" glob_path "\"";
+        if ((real_cmd | getline real) > 0) {
+          if (!(real in seen)) {
+            seen[real] = 1;
+            print file "\t" real;
+            resolve(real);
           }
         }
-        close(cmd);
+        close(real_cmd);
       }
+      close(glob_cmd);
     }
   }
   close(file);
 }
-function basename(p) {
-  n = split(p, a, "/");
-  return a[n];
+BEGIN {
+  cmd = "realpath \"" start "\"";
+  if ((cmd | getline realstart) > 0) {
+    close(cmd);
+    seen[realstart] = 1;
+    resolve(realstart);
+  } else {
+    print "ERROR: cannot resolve realpath of start file" > "/dev/stderr";
+    exit 1;
+  }
 }
-BEGIN { resolve(start) }
-' "$start"
+' > nginx_deps.tsv
+
 
