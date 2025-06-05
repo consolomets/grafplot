@@ -1,9 +1,23 @@
 while read file; do
+  clean_file=$(echo "$file" | tr -d '\r' | xargs)
   awk '
     /^[ \t]*location[ \t]+/ {
-      loc = $2
+      # получаем строку после "location", убирая модификаторы
+      line = $0
+      gsub(/^[ \t]*location[ \t]+/, "", line)
+      gsub(/[ \t]*\{[ \t]*$/, "", line)  # убираем "{", если на той же строке
+      split(line, parts, /[ \t]+/)
+
+      # если первый токен — это модификатор, берём второй
+      if (parts[1] ~ /^(\^~|~\*?|=)$/) {
+        loc = parts[2]
+      } else {
+        loc = parts[1]
+      }
+
       in_location = 1
     }
+
     in_location && /proxy_pass[ \t]+/ {
       for (i = 1; i <= NF; i++) {
         if ($i == "proxy_pass") {
@@ -13,8 +27,10 @@ while read file; do
       }
       in_location = 0
     }
+
     /}/ { in_location = 0 }
-  ' "$file"
+  ' "$clean_file"
+done < список_файлов.txt
 
 
 
