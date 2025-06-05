@@ -15,27 +15,32 @@ grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*i
 
 
 
-awk_script='
-function resolve(path,   cmd, line, inc, abs, dir) {
-  while ((getline line < path) > 0) {
-    if (match(line, /^\s*include\s+([^;]+);?/, m)) {
-      n = split(m[1], includes, " ");
-      for (i = 1; i <= n; i++) {
-        inc = includes[i];
-        cmd = "find " base " -type f -name \"" inc "\"";
-        while ((cmd | getline abs) > 0) {
-          print path "\t" abs;
-          if (!seen[abs]++) resolve(abs);
+dir="/путь/к/директории" && start="$dir/nginx.conf" && awk -v dir="$dir" '
+function resolve(file,   line, inc, cmd, path, matches, i) {
+  while ((getline line < file) > 0) {
+    if (line ~ /^[[:space:]]*include[[:space:]]+/) {
+      gsub(/;/, "", line);
+      split(line, parts, /[[:space:]]+/);
+      for (i = 2; i <= length(parts); i++) {
+        inc = parts[i];
+        cmd = "find \"" dir "\" -type f -name \"" basename(inc) "\"";
+        while ((cmd | getline path) > 0) {
+          print file "\t" path;
+          if (!(path in seen)) {
+            seen[path] = 1;
+            resolve(path);
+          }
         }
         close(cmd);
       }
     }
   }
-  close(path);
+  close(file);
 }
-BEGIN { base = dir }
-{ resolve($0) }
-'
-
-export dir="/путь/к/директории" && find "$dir" -name nginx.conf | awk -v dir="$dir" "$awk_script"
+function basename(p) {
+  n = split(p, a, "/");
+  return a[n];
+}
+BEGIN { resolve(start) }
+' "$start"
 
