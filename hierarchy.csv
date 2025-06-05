@@ -4,6 +4,6 @@ home,user,,,,
 user,documents,,,,
 documents,resume.docx,,,,
 documents,notes.txt,,,,
-home,lib,ffffff,ff00000,ffffff,ff00000
-lib,lib.so,ffffff,ff00000,ffffff,ff00000
-example,,,,,
+home,lib,#ffffff,#ff0000,#ffffff,#ff0000
+lib,lib.so,#ffffff,#ff0000,#ffffff,#ff0000
+,example,,,,

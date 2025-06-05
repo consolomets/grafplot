@@ -1,78 +1,67 @@
 import pandas as pd
-import dash
-import dash_html_components as html
 import dash_cytoscape as cyto
-from ast import literal_eval
+from dash import Dash, html
 import hashlib
-
-def make_class_from_color(bg, font):
-    # Уникальное имя класса из цветов (можно хешировать, чтобы было компактно)
-    return f"c-{hashlib.md5((bg+font).encode()).hexdigest()[:6]}"
 
 cyto.load_extra_layouts()
 
 # === Загрузка CSV ===
 df = pd.read_csv("hierarchy.csv")
 
-# Use default colors if the CSV does not provide them
 DEFAULT_BG = "#ffffff"
 DEFAULT_FONT = "#000000"
 
-# Ensure optional columns exist
-if 'BackgroundColor' not in df.columns:
-    df['BackgroundColor'] = DEFAULT_BG
-if 'FontColor' not in df.columns:
-    df['FontColor'] = DEFAULT_FONT
+def clean_color(val, default):
+    if pd.isna(val):
+        return default
+    s = str(val).strip()
+    if s.startswith('#') and len(s) in (4, 7):
+        return s
+    return default
 
-# === Построение графа ===
-df['Node'] = df['Parent'].astype(str)
-df['Target'] = df['Child'].astype(str)
+# === Разделяем строки с рёбрами и "висячими" узлами ===
+edge_df = df.dropna(subset=['Parent', 'Child'])
+dangling_df = df[pd.isna(df['Parent']) & pd.notna(df['Child'])]
 
+# === Собираем все уникальные узлы ===
+all_nodes = pd.unique(edge_df[['Parent', 'Child']].values.ravel('K')).tolist()
+all_nodes += list(dangling_df['Child'].unique())
+all_nodes = pd.unique(all_nodes)
 
-# Уникальные узлы с учетом стилей
-all_nodes = pd.unique(df[['Node', 'Target']].values.ravel('K'))
-node_styles = {n: {"font_color": DEFAULT_FONT, "background_color": DEFAULT_BG}
-               for n in all_nodes}
+# === Стили узлов ===
+node_styles = {n: {"font_color": DEFAULT_FONT, "background_color": DEFAULT_BG} for n in all_nodes}
 
-# Apply colors from CSV (assumed to describe the child node)
+# Назначаем цвета дочерним узлам
 for _, row in df.iterrows():
-    child = str(row['Child'])
-    bg = row.get('BackgroundColorChild') or DEFAULT_BG
-    font = row.get('FontColorChild') or DEFAULT_FONT
-    node_styles[child] = {
-        "font_color": font,
-        "background_color": bg
+    child = row.get('Child')
+    if pd.notna(child):
+        child = str(child)
+        bg = clean_color(row.get('BackgroundColorChild'), DEFAULT_BG)
+        font = clean_color(row.get('FontColorChild'), DEFAULT_FONT)
+        node_styles[child] = {"font_color": font, "background_color": bg}
+
+# === Генерация классов ===
+def make_class_from_color(bg, font):
+    return f"c-{hashlib.md5((bg+font).encode()).hexdigest()[:6]}"
+
+nodes = []
+classes_styles = {}
+
+for node, style in node_styles.items():
+    cls = make_class_from_color(style["background_color"], style["font_color"])
+    classes_styles[cls] = {
+        "background-color": style["background_color"],
+        "color": style["font_color"]
     }
+    nodes.append({
+        "data": {"id": node, "label": node},
+        "classes": cls
+    })
 
-# Создание узлов с учетом цветов
-nodes = [
-    {
-        "data": {
-            "id": n,
-            "label": n,
-            "font_color": style["font_color"],
-            "background_color": style["background_color"],
-        }
-    }
-    for n, style in node_styles.items()
-]
+edges = [{"data": {"source": row['Parent'], "target": row['Child']}} for _, row in edge_df.iterrows()]
 
-# Создание рёбер
-edges = [{"data": {"source": row['Parent'], "target": row['Child']}} for _, row in df.iterrows()]
-
-# === Dash App ===
-app = dash.Dash(__name__)
-
-app.layout = html.Div([
-    cyto.Cytoscape(
-        id='cytoscape',
-        elements=nodes + edges,
-        layout={
-            'name': 'dagre',
-            'rankDir': 'LR'  # Right-to-left
-        },
-        style={'height': '95vh', 'width': '100%'},
-            stylesheet = [
+# === Стили Cytoscape ===
+stylesheet = [
     {
         "selector": "node",
         "style": {
@@ -100,12 +89,23 @@ app.layout = html.Div([
     }
 ]
 
-# Добавляем стили для кастомных классов
-for class_name, style in classes_styles.items():
+# Добавим стили для цветных классов
+for cls, style in classes_styles.items():
     stylesheet.append({
-        "selector": f".{class_name}",
+        "selector": f".{cls}",
         "style": style
     })
+
+# === Dash-приложение ===
+app = Dash(__name__)
+
+app.layout = html.Div([
+    cyto.Cytoscape(
+        id='cytoscape',
+        elements=nodes + edges,
+        layout={'name': 'dagre', 'rankDir': 'LR'},
+        style={'height': '95vh', 'width': '100%'},
+        stylesheet=stylesheet
     )
 ])
 
