@@ -17,79 +17,42 @@ grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*i
 
 dir="/etc/nginx"
 start="$dir/nginx.conf"
-awk -v dir="$dir" -v start="$start" '
-function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd, parts, i, n) {
-  while ((getline line < file) > 0) {
-    if (line ~ /include[ \t]+/) {
-      gsub(/;/, "", line);
-      sub(/^[ \t]*include[ \t]+/, "", line);
-      inc = line;
-      gsub(/["'\''"]/, "", inc);
-
-      # относительный путь
-      if (substr(inc, 1, 1) != "/") {
-        n = split(file, parts, "/");
-        base = "";
-        for (i = 1; i < n; i++) base = base "/" parts[i];
-        full = base "/" inc;
-      } else {
-        full = inc;
-      }
-
-      # glob-расширение
-      cmd = "ls " full " 2>/dev/null";
-      while ((cmd | getline glob_path) > 0) {
-        realcmd = "readlink -f \"" glob_path "\"";
-        real = "";
-        if ((realcmd | getline real) > 0) {
-          close(realcmd);
-          if (!(real in seen)) {
-            seen[real] = 1;
-            print file "\t" real;
-            resolve(real);
-          }
-        }
-      }
-      close(cmd);
-    }
-  }
-  close(file);
-}
-BEGIN {
-  cmd = "readlink -f \"" start "\"";
-  if ((cmd | getline realstart) > 0) {
-    close(cmd);
-    seen[realstart] = 1;
-    resolve(realstart);
-  } else {
-    print "ERROR: cannot resolve start file" > "/dev/stderr";
-    exit 1;
-  }
-}
-' > nginx_deps.tsv
-
-
-
-
-dir="/etc/nginx"
-start="$dir/nginx.conf"
 
 awk -v start="$start" '
-function resolve(file,   line, inc) {
+function resolve(file,   line, inc, full, parts, n, i, base) {
+  if (seen[file]++) return  # уже обработан
+
   print ">> scanning: " file > "/dev/stderr"
+
   while ((getline line < file) > 0) {
     if (line ~ /[ \t]*include[ \t]+/) {
       gsub(/;/, "", line)
       sub(/^[ \t]*include[ \t]+/, "", line)
       inc = line
       gsub(/["'\''"]/, "", inc)
-      print file "\t" inc
+
+      # если путь относительный — делаем абсолютный на основе текущего файла
+      if (substr(inc, 1, 1) != "/") {
+        n = split(file, parts, "/")
+        base = ""
+        for (i = 1; i < n; i++) base = base "/" parts[i]
+        full = base "/" inc
+      } else {
+        full = inc
+      }
+
+      # glob-расширение вручную
+      cmd = "ls -1 " full " 2>/dev/null"
+      while ((cmd | getline matchpath) > 0) {
+        print file "\t" matchpath
+        resolve(matchpath)
+      }
+      close(cmd)
     }
   }
   close(file)
 }
 BEGIN {
-  print ">> start file: " start > "/dev/stderr"
   resolve(start)
 }
 ' > nginx_deps.tsv
