@@ -1,20 +1,20 @@
 while read file; do
   awk '
-    $0 ~ /^[ \t]*location[ \t]+/ {
-      if (match($0, /location[ \t]+([^ \t{]+)/, m)) {
-        loc = m[1]
-        in_location = 1
-      }
+    /^[ \t]*location[ \t]+/ {
+      loc = $2
+      in_location = 1
     }
-    in_location && $0 ~ /proxy_pass[ \t]+/ {
-      if (match($0, /proxy_pass[ \t]+([^ \t;]+)/, m)) {
-        print FILENAME "\t" loc "\t" m[1]
-        in_location = 0
+    in_location && /proxy_pass[ \t]+/ {
+      for (i = 1; i <= NF; i++) {
+        if ($i == "proxy_pass") {
+          print FILENAME "\t" loc "\t" $(i+1)
+          break
+        }
       }
+      in_location = 0
     }
-    $0 ~ /}/ { in_location = 0 }
+    /}/ { in_location = 0 }
   ' "$file"
-done < список_файлов.txt
 
 
 
