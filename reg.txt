@@ -18,21 +18,17 @@ grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*i
 dir="/etc/nginx"
 start="$dir/nginx.conf"
 awk -v dir="$dir" -v start="$start" '
-function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd) {
+function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd, parts, i, n) {
   while ((getline line < file) > 0) {
-    # ищем строки, начинающиеся с include
-    if (line ~ /^[ \t]*include[ \t]+/) {
+    if (line ~ /include[ \t]+/) {
       gsub(/;/, "", line);
-      gsub(/^include[ \t]+/, "", line);
+      sub(/^[ \t]*include[ \t]+/, "", line);
       inc = line;
-
-      # убираем кавычки
       gsub(/["'\''"]/, "", inc);
 
-      # относительный путь → сделать относительным к текущему файлу
+      # относительный путь
       if (substr(inc, 1, 1) != "/") {
-        base = file;
-        n = split(base, parts, "/");
+        n = split(file, parts, "/");
         base = "";
         for (i = 1; i < n; i++) base = base "/" parts[i];
         full = base "/" inc;
@@ -40,10 +36,10 @@ function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd) {
         full = inc;
       }
 
-      # обрабатываем glob
-      cmd = "ls -1 " full " 2>/dev/null";
+      # glob-расширение
+      cmd = "ls " full " 2>/dev/null";
       while ((cmd | getline glob_path) > 0) {
-        realcmd = "realpath \"" glob_path "\"";
+        realcmd = "readlink -f \"" glob_path "\"";
         real = "";
         if ((realcmd | getline real) > 0) {
           close(realcmd);
@@ -60,17 +56,17 @@ function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd) {
   close(file);
 }
 BEGIN {
-  cmd = "realpath \"" start "\"";
-  realstart = "";
+  cmd = "readlink -f \"" start "\"";
   if ((cmd | getline realstart) > 0) {
     close(cmd);
     seen[realstart] = 1;
     resolve(realstart);
   } else {
-    print "ERROR: cannot resolve realpath of start file" > "/dev/stderr";
+    print "ERROR: cannot resolve start file" > "/dev/stderr";
     exit 1;
   }
 }
 ' > nginx_deps.tsv
+
 
 
