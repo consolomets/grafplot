@@ -70,3 +70,30 @@ BEGIN {
 
 
 
+
+dir="/etc/nginx"
+start="$dir/nginx.conf"
+
+awk -v start="$start" '
+function resolve(file,   line, inc) {
+  print ">> scanning: " file > "/dev/stderr"
+  while ((getline line < file) > 0) {
+    if (line ~ /[ \t]*include[ \t]+/) {
+      gsub(/;/, "", line)
+      sub(/^[ \t]*include[ \t]+/, "", line)
+      inc = line
+      gsub(/["'\''"]/, "", inc)
+      print file "\t" inc
+    }
+  }
+  close(file)
+}
+BEGIN {
+  print ">> start file: " start > "/dev/stderr"
+  resolve(start)
+}
+' > nginx_deps.tsv
+
+
+
+
