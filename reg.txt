@@ -1,0 +1,14 @@
+grep -rE 'location|proxy_pass' /путь/к/директории --include='*.conf' | awk -F: '
+/location/ {
+  file=$1;
+  if (match($0, /location\s+([^ {]+)/, m)) loc=m[1];
+}
+/proxy_pass/ {
+  if (match($0, /proxy_pass\s+([^ ;]+)/, m)) print file "\t" loc "\t" m[1];
+}'
+
+
+grep -rP '^\s*include\s+' /путь/к/директории --include='*.conf' | sed -E 's/^\s*([^:]+):\s*include\s+([^;]+);?.*$/\1\t\2/'
+
+
+grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*include\s+//' | while read included; do find /путь/к/директории -type f -name "*.conf" -exec grep -l "include\s\+${included}" {} + | while read src; do echo -e "$src\t$included"; done; done
