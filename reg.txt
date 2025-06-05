@@ -15,42 +15,53 @@ grep -rhoP 'include\s+[^;]+' /путь/к/директории | sed -E 's/^\s*i
 
 
 
-dir="/etc/nginx" && start="$dir/nginx.conf" && awk -v dir="$dir" -v start="$start" '
-function resolve(file,   line, inc, full, real, i, glob_cmd, glob_path) {
+dir="/etc/nginx"
+start="$dir/nginx.conf"
+awk -v dir="$dir" -v start="$start" '
+function resolve(file,   line, inc, base, full, glob_path, real, cmd, realcmd) {
   while ((getline line < file) > 0) {
-    if (match(line, /^[[:space:]]*include[[:space:]]+([^;]+);?/, m)) {
-      inc = m[1];
+    # ищем строки, начинающиеся с include
+    if (line ~ /^[ \t]*include[ \t]+/) {
+      gsub(/;/, "", line);
+      gsub(/^include[ \t]+/, "", line);
+      inc = line;
+
+      # убираем кавычки
       gsub(/["'\''"]/, "", inc);
 
-      # относительный путь → относительно текущего файла
-      if (inc !~ /^\//) {
+      # относительный путь → сделать относительным к текущему файлу
+      if (substr(inc, 1, 1) != "/") {
         base = file;
-        sub(/[^\/]+$/, "", base);
-        full = base inc;
+        n = split(base, parts, "/");
+        base = "";
+        for (i = 1; i < n; i++) base = base "/" parts[i];
+        full = base "/" inc;
       } else {
         full = inc;
       }
 
-      # glob-шаблоны (например *.conf)
-      glob_cmd = "ls -1 " full " 2>/dev/null";
-      while ((glob_cmd | getline glob_path) > 0) {
-        real_cmd = "realpath \"" glob_path "\"";
-        if ((real_cmd | getline real) > 0) {
+      # обрабатываем glob
+      cmd = "ls -1 " full " 2>/dev/null";
+      while ((cmd | getline glob_path) > 0) {
+        realcmd = "realpath \"" glob_path "\"";
+        real = "";
+        if ((realcmd | getline real) > 0) {
+          close(realcmd);
           if (!(real in seen)) {
             seen[real] = 1;
             print file "\t" real;
             resolve(real);
           }
         }
-        close(real_cmd);
       }
-      close(glob_cmd);
+      close(cmd);
     }
   }
   close(file);
 }
 BEGIN {
   cmd = "realpath \"" start "\"";
+  realstart = "";
   if ((cmd | getline realstart) > 0) {
     close(cmd);
     seen[realstart] = 1;
